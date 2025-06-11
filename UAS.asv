@@ -1,0 +1,85 @@
+% =========================================================================
+% EKSPERIMEN POST-PROCESSING (METODE WATERSHED)
+% Tujuan: Memproses beberapa gambar dan menampilkan perbandingan
+%         antara gambar asli dan hasil akhir menggunakan watershed.
+% =========================================================================
+
+%% 1. Daftar Gambar yang Akan Diproses
+image_folder = 'image';
+file_list = {
+    'Fluo-C3DH-A549-SIM.png', ...
+    'Fluo-C3DL-MDA231.png', ...
+    'Fluo-N3DL-TRIC.png'
+    };
+
+%% 2. Loop untuk Setiap Gambar
+for i = 1:length(file_list)
+    
+    current_filename = file_list{i};
+    image_path = fullfile(image_folder, current_filename);
+    
+    fprintf('Memproses gambar: %s\n', current_filename);
+    
+    % --- Validasi File ---
+    if ~exist(image_path, 'file')
+        warning('File gambar tidak ditemukan: %s. Melanjutkan ke gambar berikutnya.', image_path);
+        continue;
+    end
+    
+    % --- Memuat dan Pra-pemrosesan ---
+    original_image = imread(image_path);
+    if size(original_image, 3) == 3
+        gray_image = rgb2gray(original_image);
+    else
+        gray_image = original_image;
+    end
+    
+    raw_segmentation = imbinarize(gray_image);
+    
+    % --- Post-Processing Menggunakan Fungsi Watershed ---
+    processed_segmentation = postprocess_cells_regular(raw_segmentation);
+    
+    % --- Visualisasi untuk Setiap Gambar (Hanya 2 Output) ---
+    figure;
+    
+    subplot(1, 2, 1);
+    imshow(original_image);
+    title('Original');
+    
+    subplot(1, 2, 2);
+    imshow(processed_segmentation);
+    title('Setelah Post-Processing (Watershed Biasa)');
+    
+    title_text = sprintf('Hasil Proses untuk: %s', current_filename);
+    sgtitle(title_text, 'FontSize', 14);
+    
+end
+
+fprintf('Semua gambar telah selesai diproses.\n');
+
+
+%% FUNGSI UNTUK POST-PROCESSING (WATERSHED BIASA)
+function final_mask_rgb = postprocess_cells_regular(binary_mask)
+    % Fungsi ini menggunakan watershed standar tanpa marker.
+
+    % Langkah a: Mengisi lubang-lubang kecil di dalam objek sel
+    filled_mask = imfill(binary_mask, 'holes');
+
+    % Langkah b: Menghitung Distance Transform
+    D = -bwdist(~filled_mask);
+    
+    % Langkah c: Menjalankan Watershed Biasa
+    % Tidak ada marker, langsung diterapkan pada distance transform.
+    L = watershed(D);
+    
+    % Langkah d: Membuat citra hasil
+    final_mask = filled_mask;
+    final_mask(L == 0) = 0; % Membuat garis pemisah
+    
+    % Langkah e: Menghilangkan objek yang sangat kecil (noise)
+    pixel_threshold = 15;
+    final_mask = bwareaopen(final_mask, pixel_threshold);
+
+    % Untuk visualisasi yang lebih baik, kita beri label warna
+    final_mask_rgb = label2rgb(bwlabel(final_mask), 'jet', 'k', 'shuffle');
+end
